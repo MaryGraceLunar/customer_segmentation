@@ -1,0 +1,14 @@
+cd path
+env_cust_seg\Scripts\activate
+pip install -r requirements.txt
+python main.py 
+streamlit run my_app.py
+
+Use env_cust_seg interpreter in the VS Code
+
+Username: mary
+Hashed password: $2b$12$MQ/v6fGWoXs.wri5CJ8EOeOOTf5KHMEuxrQQ1mIKa/7qUxc0iUGji
+Password: Winter0501!
+
+Username: john
+Hashed password: $2b$12$z9V/PxJZJ1sQF.lDvFF8vuOnEDkC8Jo7V9AiSAVX8V0qzqgCTO4HK
