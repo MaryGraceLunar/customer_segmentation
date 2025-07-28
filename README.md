@@ -1,4 +1,4 @@
-# credit_eligibility_application
+# customer_segmentation_productRecom_application
 This app has been built using Streamlit and deployed with Streamlit community cloud
 
 [Visit the app here](https://km-customer-segmentation-app.streamlit.app/)
