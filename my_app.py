@@ -12,6 +12,7 @@ import time
 # Page config
 st.set_page_config(page_title="Customer Segmentation", layout="centered")
 
+
 # ── Authentication Setup ──
 credentials = {
     "usernames": {
@@ -84,6 +85,13 @@ customer_ids = df_customers['CustomerID'].dropna().astype(int).astype(str).tolis
 
 # ── Main ──
 if st.session_state.get("authentication_status"):
+    if "customer_id" not in st.session_state:
+        st.session_state["customer_id"] = None
+    if "predicted_cluster" not in st.session_state:
+        st.session_state["predicted_cluster"] = None
+    if "predicted_segment" not in st.session_state:
+        st.session_state["predicted_segment"] = None
+
     name = st.session_state["name"]
     authenticator.logout("Logout", "sidebar")
     st.sidebar.success(f"Welcome, {name}")
@@ -102,6 +110,7 @@ if st.session_state.get("authentication_status"):
 
         previous_user_type = st.session_state.get("previous_user_type", None)
         user_type = st.selectbox("Are you a new customer or existing customer?", ["Select...", "New", "Existing"])
+        st.session_state["user_type"] = user_type
 
         # Reset fields when switching types
         if user_type != previous_user_type:
@@ -118,24 +127,39 @@ if st.session_state.get("authentication_status"):
                 st.session_state.pop("recency", None)
                 st.session_state.pop("frequency", None)
                 st.session_state.pop("monetary", None)
-        
-        if user_type == "Existing":
-            customer_id = st.selectbox("Select your Customer ID", customer_ids, key="existing_customer_id")
-            if st.button("Submit", key="submit_existing"):
-                with st.spinner("Predicting segment and fetching top picks..."):
-                    time.sleep(1.5)
-                    st.session_state.user_type = "existing"
-                    st.session_state.customer_id = customer_id
 
-                rfm_clustered = load_clustered_customers()
-                cust_info = rfm_clustered[rfm_clustered["CustomerID"] == int(customer_id)]
-                if not cust_info.empty:
-                    cluster = int(cust_info["Cluster"].iloc[0])
-                    segment = cust_info["Segment"].iloc[0]
-                    st.session_state['predicted_cluster'] = cluster
-                    st.session_state['predicted_segment'] = segment
+        if user_type == "Existing":
+            customer_input = st.text_input("Enter your Customer ID", key="existing_customer_id")
+
+            if st.button("Submit", key="submit_existing"):
+                # Clear previous outputs first
+                st.session_state['predicted_cluster'] = None
+                st.session_state['predicted_segment'] = None
+                st.session_state['customer_id'] = None
+
+                if customer_input.isdigit():
+                    customer_id = int(customer_input)
+                    if str(customer_id) in customer_ids:
+                        with st.spinner("Predicting segment and fetching top picks..."):
+                            time.sleep(1.5)
+                            st.session_state.user_type = "existing"
+                            st.session_state.customer_id = customer_id
+
+                        rfm_clustered = load_clustered_customers()
+                        cust_info = rfm_clustered[rfm_clustered["CustomerID"] == customer_id]
+                        if not cust_info.empty:
+                            cluster = int(cust_info["Cluster"].iloc[0])
+                            segment = cust_info["Segment"].iloc[0]
+                            st.session_state['predicted_cluster'] = cluster
+                            st.session_state['predicted_segment'] = segment
+                        else:
+                            st.warning("Customer ID not found.")
+                    else:
+                        st.warning("Customer ID does not exist. Please try again.")
                 else:
-                    st.warning("Customer ID not found.")
+                    st.warning("Please enter a valid numeric Customer ID.")
+
+
 
         elif user_type == "New":
             recency = st.number_input("Days Since Last Purchase", min_value=0, value=30, key="recency_input")
@@ -157,74 +181,84 @@ if st.session_state.get("authentication_status"):
         if 'predicted_cluster' in st.session_state and 'predicted_segment' in st.session_state:
             cluster = st.session_state['predicted_cluster']
             segment = st.session_state['predicted_segment']
-            
-            segment_descriptions = {
-                "Promising": "You’re starting to show great potential — keep it up!",
-                "At Risk": "You haven’t shopped for a while. We’d love to see you back!",
-                "Loyal": "You consistently choose us — we appreciate you!",
-                "Champion": "You’re a top spender — we want to reward you!"
-            }
-            desc = segment_descriptions.get(segment, "Here's what makes you unique.")
 
-            if segment == "At Risk":
-                st.error(f"#### You're an **{segment}** shopper — let's fix that!")
-            elif segment in ["Loyal", "High Value", "Champion"]:
-                st.success(f"#### What a **{segment}** customer!")
-            elif segment in ["Promising"]:
-                st.info(f"#### You are a **{segment}** customer!")
-            else:
-                st.warning(f"#### You are a **{segment}** customer!")
-                
-            st.markdown(f"<p style='font-size:16px; margin-top: -10px;'>{desc}</p>", unsafe_allow_html=True)
+            # Check if customer ID is valid (for existing users only)
+            customer_id = st.session_state.get("customer_id")
+            rfm_clustered = load_clustered_customers()
 
-            if st.session_state.user_type == "existing":
-                rfm_clustered = load_clustered_customers()
-                cust_info = rfm_clustered[rfm_clustered["CustomerID"] == int(st.session_state.customer_id)]
-                    
-                st.write(f"Your key stats at a glance: ")
-                if not cust_info.empty:
-                    r = cust_info["Recency"].iloc[0]
-                    f = cust_info["Frequency"].iloc[0]
-                    m = cust_info["Monetary"].iloc[0]
+            is_valid_customer = (
+                st.session_state.get("user_type") == "existing"
+                and isinstance(customer_id, (int, float))
+                and not pd.isna(customer_id)
+                and customer_id in rfm_clustered["CustomerID"].values
+            )
 
-                    col1, col2, col3 = st.columns(3)
-                    col1.write(f"**Recency**  \n{r}")
-                    col2.write(f"**Frequency**  \n{f}")
-                    col3.write(f"**Total Spent**  \n${m:.2f}")
+            # Always show segment info for new users or valid existing customers
+            if st.session_state.get("user_type") == "new" or is_valid_customer:
 
-            recommendations = load_recommendations()
-            cluster = st.session_state['predicted_cluster']
-            segment = st.session_state['predicted_segment']
+                segment_descriptions = {
+                    "Promising": "You’re starting to show great potential — keep it up!",
+                    "At Risk": "You haven’t shopped for a while. We’d love to see you back!",
+                    "Loyal": "You consistently choose us — we appreciate you!",
+                    "Champion": "You’re a top spender — we want to reward you!"
+                }
+                desc = segment_descriptions.get(segment, "Here's what makes you unique.")
 
-            st.write(f"**Recommended items just for you:**")
-            cluster_recs = recommendations[recommendations["Cluster"] == cluster]
+                if segment == "At Risk":
+                    st.error(f"#### You're an **{segment}** shopper — let's fix that!")
+                elif segment in ["Loyal", "High Value", "Champion"]:
+                    st.success(f"#### What a **{segment}** customer!")
+                elif segment == "Promising":
+                    st.info(f"#### You are a **{segment}** customer!")
+                else:
+                    st.warning(f"#### Your CustomerID cannot be found!")
 
-            if not cluster_recs.empty:
-                product_names = cluster_recs["Description"].unique().tolist()
+                st.markdown(f"<p style='font-size:16px; margin-top: -10px;'>{desc}</p>", unsafe_allow_html=True)
 
-                # Display product names
-                st.markdown(
-                    """
-                    <style>
-                        .pill {
-                            display: inline-block;
-                            padding: 6px 12px;
-                            margin: 4px 4px 4px 0;
-                            background-color: #fce8e6;
-                            color: #5c2c2c;
-                            border-radius: 20px;
-                            font-size: 14px;
-                            font-family: sans-serif;
-                        }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
+                # Show key stats only for valid existing users
+                if st.session_state.get("user_type") == "existing":
+                    cust_info = rfm_clustered[rfm_clustered["CustomerID"] == customer_id]
+                    if not cust_info.empty:
+                        st.write(f"Your key stats at a glance:")
+                        r = cust_info["Recency"].iloc[0]
+                        f = cust_info["Frequency"].iloc[0]
+                        m = cust_info["Monetary"].iloc[0]
 
-                pill_html = "".join([f'<span class="pill">{name}</span>' for name in product_names])
-                st.markdown(pill_html, unsafe_allow_html=True)
-            else:
-                st.info("No recommendations found for this cluster.")
+                        col1, col2, col3 = st.columns(3)
+                        col1.write(f"**Recency**  \n{r}")
+                        col2.write(f"**Frequency**  \n{f}")
+                        col3.write(f"**Total Spent**  \n${m:.2f}")
+
+                # Recommendations
+                recommendations = load_recommendations()
+                cluster_recs = recommendations[recommendations["Cluster"] == cluster]
+
+                st.write(f"**Recommended items just for you:**")
+                if not cluster_recs.empty:
+                    product_names = cluster_recs["Description"].unique().tolist()
+
+                    st.markdown(
+                        """
+                        <style>
+                            .pill {
+                                display: inline-block;
+                                padding: 6px 12px;
+                                margin: 4px 4px 4px 0;
+                                background-color: #fce8e6;
+                                color: #5c2c2c;
+                                border-radius: 20px;
+                                font-size: 14px;
+                                font-family: sans-serif;
+                            }
+                        </style>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                    pill_html = "".join([f'<span class="pill">{name}</span>' for name in product_names])
+                    st.markdown(pill_html, unsafe_allow_html=True)
+                else:
+                    st.info("No recommendations found for this cluster.")
 
 
         # ── Tab 2 ──
@@ -232,7 +266,13 @@ if st.session_state.get("authentication_status"):
         st.subheader("Where You Fit in Our Customer Landscape")
 
         # Show cluster and segment (both new and existing)
-        if 'predicted_cluster' in st.session_state and 'predicted_segment' in st.session_state:
+        if (
+                    'predicted_cluster' in st.session_state and
+                    'predicted_segment' in st.session_state and
+                    st.session_state['predicted_cluster'] is not None and
+                    st.session_state['predicted_segment'] is not None and
+                    st.session_state.get("customer_id") is not None
+                ):
             if segment == "At Risk":
                 st.error(f"#### You're an **{segment}** shopper — let's fix that!")
             elif segment in ["Loyal", "Champion"]:
@@ -271,7 +311,7 @@ if st.session_state.get("authentication_status"):
         user_type = st.session_state.get("user_type", None)
         customer_point = None
 
-        if user_type == "existing" and "customer_id" in st.session_state:
+        if user_type == "existing" and st.session_state.get("customer_id") is not None:
             customer_id = int(st.session_state.customer_id)
             customer_row = rfm_clustered[rfm_clustered["CustomerID"] == customer_id]
             if not customer_row.empty:
