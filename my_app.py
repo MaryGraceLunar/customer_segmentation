@@ -267,11 +267,14 @@ if st.session_state.get("authentication_status"):
 
         # Show cluster and segment (both new and existing)
         if (
-                    'predicted_cluster' in st.session_state and
-                    'predicted_segment' in st.session_state and
-                    st.session_state['predicted_cluster'] is not None and
-                    st.session_state['predicted_segment'] is not None and
-                    st.session_state.get("customer_id") is not None
+            'predicted_cluster' in st.session_state and
+            'predicted_segment' in st.session_state and
+            st.session_state['predicted_cluster'] is not None and
+            st.session_state['predicted_segment'] is not None and
+            (
+                st.session_state.get("user_type") == "new" or
+                st.session_state.get("customer_id") is not None
+            )
                 ):
             if segment == "At Risk":
                 st.error(f"#### You're an **{segment}** shopper — let's fix that!")
