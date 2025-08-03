@@ -69,14 +69,6 @@ def load_recommendations():
     query = "SELECT * FROM dbo.Top_Recommendations"
     return query_db(engine, query)
 
-# ── Fetch unique Customer IDs for dropdown ──
-@st.cache_data
-def load_customer_ids():
-    query = "SELECT DISTINCT CustomerID FROM dbo.Clustered_Customers WHERE CustomerID IS NOT NULL"
-    df_customers = query_db(engine, query)
-    return df_customers['CustomerID'].dropna().astype(int).astype(str).tolist()
-
-customer_ids = load_customer_ids()
 
 # Fetch unique Customer IDs from the database
 
@@ -132,7 +124,7 @@ if st.session_state.get("authentication_status"):
             customer_input = st.text_input("Enter your Customer ID", key="existing_customer_id")
 
             if st.button("Submit", key="submit_existing"):
-                # Clear previous outputs first
+                # Clear previous outputs
                 st.session_state['predicted_cluster'] = None
                 st.session_state['predicted_segment'] = None
                 st.session_state['customer_id'] = None
@@ -182,7 +174,7 @@ if st.session_state.get("authentication_status"):
             cluster = st.session_state['predicted_cluster']
             segment = st.session_state['predicted_segment']
 
-            # Check if customer ID is valid (for existing users only)
+            # Check if customer ID is valid
             customer_id = st.session_state.get("customer_id")
             rfm_clustered = load_clustered_customers()
 
@@ -193,7 +185,7 @@ if st.session_state.get("authentication_status"):
                 and customer_id in rfm_clustered["CustomerID"].values
             )
 
-            # Always show segment info for new users or valid existing customers
+            # Show segment
             if st.session_state.get("user_type") == "new" or is_valid_customer:
 
                 segment_descriptions = {
@@ -206,7 +198,7 @@ if st.session_state.get("authentication_status"):
 
                 if segment == "At Risk":
                     st.error(f"#### You're an **{segment}** shopper — let's fix that!")
-                elif segment in ["Loyal", "High Value", "Champion"]:
+                elif segment in ["Loyal", "Champion"]:
                     st.success(f"#### What a **{segment}** customer!")
                 elif segment == "Promising":
                     st.info(f"#### You are a **{segment}** customer!")
@@ -215,7 +207,7 @@ if st.session_state.get("authentication_status"):
 
                 st.markdown(f"<p style='font-size:16px; margin-top: -10px;'>{desc}</p>", unsafe_allow_html=True)
 
-                # Show key stats only for valid existing users
+                # Show key stats - existing users
                 if st.session_state.get("user_type") == "existing":
                     cust_info = rfm_clustered[rfm_clustered["CustomerID"] == customer_id]
                     if not cust_info.empty:
@@ -265,7 +257,7 @@ if st.session_state.get("authentication_status"):
     with tab2:
         st.subheader("Where You Fit in Our Customer Landscape")
 
-        # Show cluster and segment (both new and existing)
+        # Show cluster and segment
         if (
             'predicted_cluster' in st.session_state and
             'predicted_segment' in st.session_state and
@@ -326,7 +318,6 @@ if st.session_state.get("authentication_status"):
             "Monetary": st.session_state["monetary"]
         }
 
-        # Define custom colors for each segment
         custom_colors = {
             "Champion": "#28a745",      
             "At Risk": "#E998C0",       
